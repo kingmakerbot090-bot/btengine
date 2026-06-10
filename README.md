@@ -35,15 +35,21 @@ btengine --kingmaker data/kingmaker-data --save-betlogs out/
 KINGMAKER_DATA=data/kingmaker-data pytest   # enables integration tests
 ```
 
-The adapter (`btengine/ingest/kingmaker.py`) maps `odds.parquet` +
-`matches.parquet` + `ball_by_ball.parquet` onto the contract below:
-keeps only OPEN match-odds runners (the raw stream mixes in innings-runs
-and player props), normalises team renames (Bangalore→Bengaluru),
-dedupes re-sent quotes, drops the 3 no-result/tie matches, and derives
-bats-first from the first innings. Yield: 273 settled IPL matches,
-2021–2025, ~226k ticks. Pipeline validation: 528/528 pre-off closing
-prices match the independently computed `closing_lines.parquet` exactly
-(tested in `tests/test_kingmaker.py`).
+Match facts come from the raw cricsheet dump
+(https://cricsheet.org/downloads/ipl_json.zip — the `ipl_json/` folder
+in the dump), parsed by `btengine/ingest/cricsheet.py`; the pre-parsed
+parquets are only a fallback (`load_kingmaker(..., source=...)`). Tied
+matches settle on the super-over winner, matching Betfair MATCH_ODDS
+rules; abandoned matches are dropped.
+
+The adapter (`btengine/ingest/kingmaker.py`) maps the quote stream onto
+the contract below: keeps only OPEN match-odds runners (the raw stream
+mixes in innings-runs and player props), normalises team renames
+(Bangalore→Bengaluru), and dedupes re-sent quotes. Yield: 274 settled
+IPL matches, 2021–2025, ~227k ticks. Pipeline validation: 528/528
+pre-off closing prices match the independently computed
+`closing_lines.parquet` exactly, and the cricsheet parser is
+cross-checked against the pre-parsed tables (`tests/test_kingmaker.py`).
 
 ## Data contract (inputs the engine assumes)
 

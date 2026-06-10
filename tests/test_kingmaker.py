@@ -69,6 +69,50 @@ def test_closing_lines_match_independent_computation(real_ticks):
     assert checked > 500
 
 
+def test_cricsheet_parser_agrees_with_preparsed_tables():
+    from btengine.ingest.cricsheet import load_cricsheet
+
+    cs = load_cricsheet(DATA_DIR / "ipl_json").set_index("match_id")
+    mt = pd.read_parquet(DATA_DIR / "matches.parquet").set_index("match_id")
+    shared = cs.index.intersection(mt.index)
+    assert len(shared) == len(mt)
+
+    # winners agree wherever the pre-parsed table has one; cricsheet adds
+    # super-over winners on top (tie -> eliminator)
+    has_winner = mt.loc[shared, "winner"].notna()
+    pd.testing.assert_series_equal(
+        cs.loc[shared, "winner"][has_winner],
+        mt.loc[shared, "winner"][has_winner],
+        check_names=False,
+    )
+    ties = mt.loc[shared, "result"] == "tie"
+    assert cs.loc[shared, "winner"][ties].notna().any()
+
+    # bats-first agrees with the ball-by-ball first innings everywhere
+    bb = pd.read_parquet(DATA_DIR / "ball_by_ball.parquet")
+    first = bb[bb["innings"] == 1].groupby("match_id")["innings_team"].first()
+    both = cs.index.intersection(first.index)
+    pd.testing.assert_series_equal(
+        cs.loc[both, "bats_first"], first.loc[both], check_names=False
+    )
+
+
+def test_source_parity_except_super_over_ties(kingmaker):
+    from btengine.ingest.kingmaker import load_kingmaker
+
+    odds_cs, results_cs, _ = kingmaker
+    odds_pq, results_pq, _ = load_kingmaker(DATA_DIR, source="parquet")
+    cs_ids = set(results_cs["match_id"])
+    pq_ids = set(results_pq["match_id"])
+    assert pq_ids <= cs_ids  # cricsheet settles super-over ties on top
+    extra = cs_ids - pq_ids
+    assert len(extra) <= 2
+    pd.testing.assert_frame_equal(
+        odds_cs[odds_cs["match_id"].isin(pq_ids)].reset_index(drop=True),
+        odds_pq.reset_index(drop=True),
+    )
+
+
 def test_fav_tagging_is_sane(real_ticks):
     per_match = real_ticks.groupby(["match_id", "team"]).agg(
         fav=("is_fav", "first"), won=("won", "first")
