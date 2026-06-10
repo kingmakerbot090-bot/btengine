@@ -52,11 +52,17 @@ def main(argv=None) -> int:
                     help="extra slippage for the execution stress run")
     ap.add_argument("--save-betlogs", metavar="DIR",
                     help="write one betlog CSV per strategy into DIR")
+    ap.add_argument("--kingmaker", metavar="DIR",
+                    help="load the kingmaker parquet dump from DIR")
     ap.add_argument("--demo", action="store_true",
                     help="run on synthetic data (no input files needed)")
     args = ap.parse_args(argv)
 
-    if args.demo:
+    if args.kingmaker:
+        from btengine.ingest.kingmaker import load_kingmaker
+        odds, results, context = load_kingmaker(args.kingmaker)
+        ticks = build_tick_table(odds, results, context)
+    elif args.demo:
         odds, results, context = make_synthetic()
         ticks = build_tick_table(odds, results, context)
         print("demo mode: synthetic data (efficient market — expect ~-EV "
