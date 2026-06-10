@@ -113,6 +113,56 @@ def test_source_parity_except_super_over_ties(kingmaker):
     )
 
 
+def test_cricsheet_deliveries_match_preparsed_ball_by_ball():
+    from btengine.ingest.cricsheet import load_deliveries
+
+    bb = pd.read_parquet(DATA_DIR / "ball_by_ball.parquet")
+    cs = load_deliveries(DATA_DIR / "ipl_json")
+    sample = bb["match_id"].drop_duplicates().iloc[:25]
+    cols = ["match_id", "innings", "over", "ball", "innings_team",
+            "runs_total", "legal_ball", "wicket"]
+    key = ["match_id", "innings", "over", "ball"]
+    a = bb.loc[bb["match_id"].isin(sample), cols].sort_values(key)
+    b = cs.loc[cs["match_id"].isin(sample), cols].sort_values(key)
+    pd.testing.assert_frame_equal(
+        a.reset_index(drop=True), b.reset_index(drop=True),
+        check_dtype=False,
+    )
+
+
+def test_alignment_wicket_jump_lift(real_ticks):
+    from btengine.align import wicket_jump_lift
+
+    bb = pd.read_parquet(DATA_DIR / "ball_by_ball.parquet")
+    bb["innings_team"] = bb["innings_team"].replace(
+        {"Royal Challengers Bangalore": "Royal Challengers Bengaluru"}
+    )
+    lift, n = wicket_jump_lift(real_ticks, bb)
+    assert n > 3000
+    assert lift > 1.5, f"alignment lost its signal: lift={lift:.2f}"
+
+
+def test_attached_state_covers_the_stream(real_ticks):
+    from btengine.align import attach_state
+
+    bb = pd.read_parquet(DATA_DIR / "ball_by_ball.parquet")
+    bb["innings_team"] = bb["innings_team"].replace(
+        {"Royal Challengers Bangalore": "Royal Challengers Bengaluru"}
+    )
+    aligned = attach_state(real_ticks, bb)
+    assert len(aligned) == len(real_ticks)
+    inplay = aligned[aligned["inplay"]]
+    assert inplay["est_innings"].notna().mean() > 0.95
+    # both innings observed in nearly every match
+    reach2 = inplay.groupby("match_id")["est_innings"].max()
+    assert (reach2 >= 2).mean() > 0.9
+    # the batting team is always one of the two runners
+    known = inplay[inplay["batting_team"].notna()]
+    assert known.groupby("match_id").apply(
+        lambda g: g["batting_team"].isin(g["team"]).all()
+    ).all()
+
+
 def test_fav_tagging_is_sane(real_ticks):
     per_match = real_ticks.groupby(["match_id", "team"]).agg(
         fav=("is_fav", "first"), won=("won", "first")

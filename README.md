@@ -97,6 +97,33 @@ btengine/
   cli.py           btengine --demo | --odds/--results [--rebuild ...]
 ```
 
+## Aligning odds with ball-by-ball data (`btengine/align.py`)
+
+Cricsheet deliveries carry no timestamps and the odds feed is a 60-second
+polled snapshot stream (the market stays OPEN through the innings break),
+so the two are bridged with a clock model built from live-knowable
+quantities only: the off, a constant seconds-per-delivery, and a fixed
+innings break (`ClockModel(48.0, 25.0)` — calibrated on this dataset).
+`attach_state(ticks, deliveries)` then gives every tick the estimated
+match state — `est_innings`, `est_over`, `est_wkts`, `est_score`,
+`est_target`, `batting_team`, `is_batting` — **causally**: a tick only
+sees deliveries whose estimated time is in its past (tested by truncating
+future deliveries).
+
+Validation is built in: `wicket_jump_lift` measures the mean de-vigged
+price move around estimated wicket times against the baseline move. The
+calibrated clock scores **~2.0x** on the kingmaker data (1.0x would mean
+the clock is uninformative); a regression test gates it at 1.5x. Treat
+attached state as over-level truth, not ball-level (timeouts, drinks and
+rain shift the clock by a few balls mid-innings).
+
+The CLI attaches state automatically under `--kingmaker`, so entry
+triggers can use it, e.g. `lambda t: t["drift_mult"] >= 1.5 and
+t["est_innings"] == 1`. First finding from this split: the
+lay-the-drifting-fav edge is concentrated in innings 1 / while the
+favourite bats; the same trigger in innings 2 catches drifted favs at
+~6.0 average odds and is firmly -EV.
+
 ## Defining a strategy
 
 ```python

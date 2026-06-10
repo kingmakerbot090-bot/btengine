@@ -28,6 +28,13 @@ from btengine.evaluate import (
     sweep,
 )
 from btengine.report import save_betlog
+from btengine.align import (
+    ClockModel,
+    attach_state,
+    delivery_table,
+    estimate_delivery_times,
+    wicket_jump_lift,
+)
 
 __all__ = [
     "devig", "load_odds", "load_results", "load_context",
@@ -37,4 +44,6 @@ __all__ = [
     "Result", "evaluate", "equity_curve", "max_drawdown",
     "by_segment", "run_strategies", "sweep",
     "save_betlog",
+    "ClockModel", "attach_state", "delivery_table",
+    "estimate_delivery_times", "wicket_jump_lift",
 ]

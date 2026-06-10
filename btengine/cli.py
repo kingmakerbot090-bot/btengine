@@ -59,9 +59,17 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.kingmaker:
-        from btengine.ingest.kingmaker import load_kingmaker
+        from btengine.align import attach_state, wicket_jump_lift
+        from btengine.ingest.kingmaker import (
+            load_kingmaker, load_kingmaker_deliveries,
+        )
         odds, results, context = load_kingmaker(args.kingmaker)
         ticks = build_tick_table(odds, results, context)
+        deliveries = load_kingmaker_deliveries(args.kingmaker)
+        lift, n_wkts = wicket_jump_lift(ticks, deliveries)
+        print(f"ball-by-ball alignment: wicket-jump lift {lift:.2f}x "
+              f"over {n_wkts} wickets (1.0 = uninformative clock)")
+        ticks = attach_state(ticks, deliveries)
     elif args.demo:
         odds, results, context = make_synthetic()
         ticks = build_tick_table(odds, results, context)

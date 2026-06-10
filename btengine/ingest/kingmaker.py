@@ -58,6 +58,25 @@ def _facts_from_parquet(data_dir: Path) -> pd.DataFrame:
     return matches[["match_id"] + _FACT_COLS]
 
 
+def load_kingmaker_deliveries(data_dir, source: str = "auto") -> pd.DataFrame:
+    """Ball-by-ball deliveries with team names normalised to match the
+    odds stream (for btengine.align)."""
+    from btengine.ingest.cricsheet import load_deliveries
+
+    data_dir = Path(data_dir)
+    if source == "auto":
+        has_json = (data_dir / "ipl_json").is_dir() or \
+            (data_dir / "ipl_json.zip").exists()
+        source = "cricsheet" if has_json else "parquet"
+    if source == "cricsheet":
+        src = data_dir / "ipl_json"
+        bb = load_deliveries(src if src.is_dir() else data_dir / "ipl_json.zip")
+    else:
+        bb = pd.read_parquet(data_dir / "ball_by_ball.parquet")
+    bb["innings_team"] = _normalise(bb["innings_team"])
+    return bb
+
+
 def load_kingmaker(
     data_dir, source: str = "auto"
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:

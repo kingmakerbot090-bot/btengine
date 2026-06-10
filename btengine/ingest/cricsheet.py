@@ -51,23 +51,61 @@ def parse_match(data: dict, match_id: str) -> dict:
     }
 
 
-def load_cricsheet(source) -> pd.DataFrame:
-    """Parse a cricsheet dump (directory of *.json or a .zip) into one row
-    per match. match_id is the cricsheet file stem."""
+def _iter_matches(source):
     source = Path(source)
-    rows = []
     if source.is_dir():
         for f in sorted(source.glob("*.json")):
-            rows.append(parse_match(json.loads(f.read_text()), f.stem))
+            yield f.stem, json.loads(f.read_text())
     elif zipfile.is_zipfile(source):
         with zipfile.ZipFile(source) as zf:
             for name in sorted(zf.namelist()):
                 if name.endswith(".json"):
-                    rows.append(
-                        parse_match(json.loads(zf.read(name)), Path(name).stem)
-                    )
+                    yield Path(name).stem, json.loads(zf.read(name))
     else:
         raise ValueError(f"{source} is neither a directory nor a zip")
+
+
+def load_cricsheet(source) -> pd.DataFrame:
+    """Parse a cricsheet dump (directory of *.json or a .zip) into one row
+    per match. match_id is the cricsheet file stem."""
+    rows = [parse_match(data, mid) for mid, data in _iter_matches(source)]
     if not rows:
         raise ValueError(f"no cricsheet json found in {source}")
     return pd.DataFrame(rows, columns=MATCH_COLS)
+
+
+DELIVERY_COLS = [
+    "match_id", "innings", "over", "ball", "innings_team",
+    "runs_total", "legal_ball", "wicket",
+]
+
+
+def parse_deliveries(data: dict, match_id: str) -> list[dict]:
+    rows = []
+    for inn_no, inn in enumerate(data.get("innings", []), start=1):
+        team = inn["team"]
+        for over in inn.get("overs", []):
+            for ball_no, dl in enumerate(over["deliveries"], start=1):
+                extras = dl.get("extras", {})
+                rows.append({
+                    "match_id": match_id,
+                    "innings": inn_no,
+                    "over": over["over"],
+                    "ball": ball_no,
+                    "innings_team": team,
+                    "runs_total": dl["runs"]["total"],
+                    "legal_ball": not ("wides" in extras or "noballs" in extras),
+                    "wicket": bool(dl.get("wickets")),
+                })
+    return rows
+
+
+def load_deliveries(source) -> pd.DataFrame:
+    """Parse a cricsheet dump into one row per delivery (the minimal
+    schema btengine.align consumes; ball_by_ball.parquet matches it)."""
+    rows = []
+    for mid, data in _iter_matches(source):
+        rows.extend(parse_deliveries(data, mid))
+    if not rows:
+        raise ValueError(f"no cricsheet json found in {source}")
+    return pd.DataFrame(rows, columns=DELIVERY_COLS)
