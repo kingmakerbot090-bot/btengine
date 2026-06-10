@@ -123,6 +123,30 @@ def lay_steaming_dog(
     )
 
 
+def lay_band_drift(
+    low: float = 1.70,
+    high: float = 1.90,
+    trigger: float = 2.30,
+    disaster_sl: float = 2.0,
+) -> Strategy:
+    """PRE-REGISTERED 2026 OOS CANDIDATE (frozen 2026-06-10, before any
+    2026 odds were available; tuned on 2021-25 kingmaker data).
+
+    Lay the pre-off favourite priced in [low, high] at the first in-play
+    tick >= trigger. No take-profit; disaster stop only: green up if the
+    price shortens to entry/disaster_sl (locked loss ~= one stake).
+    2021-25 in-sample: +16.4% ROI, max DD ~10 stakes, n=136."""
+    return Strategy(
+        name=f"lay_fav{low:g}-{high:g}_at{trigger:g}_SL100",
+        select="fav",
+        side="lay",
+        preoff_filter=lambda p: low <= p["preoff_price"] <= high,
+        entry=lambda t: bool(t["inplay"] and t["odds"] >= trigger),
+        window=(0.0, 600.0),
+        exit=lambda t, eo: bool(t["inplay"] and t["odds"] <= eo / disaster_sl),
+    )
+
+
 register(lay_drifting_fav(1.3))
 register(lay_drifting_fav(1.5))
 register(lay_drifting_fav(2.0))
